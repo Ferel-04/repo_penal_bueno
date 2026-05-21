@@ -1,9 +1,14 @@
 from fastapi.testclient import TestClient
 
-from main import app
+import main
+from ingest import parse_articles
 
 
-client = TestClient(app)
+client = TestClient(main.app)
+
+
+def setup_function():
+    main.load_articles = parse_articles
 
 
 def test_articles_endpoint_returns_mock_articles():

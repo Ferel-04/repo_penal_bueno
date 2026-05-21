@@ -24,6 +24,11 @@ Thumbs.db
 # Logs
 *.log
 
+# Local SQLite data
+*.db
+*.db-shm
+*.db-wal
+
 # Node / Frontend
 node_modules/
 .next/
