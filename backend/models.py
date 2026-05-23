@@ -6,7 +6,12 @@ from database import Base
 class LegalArticle(Base):
     __tablename__ = "legal_articles"
     __table_args__ = (
-        UniqueConstraint("article_number", "source_name", name="uq_legal_articles_article_source"),
+        UniqueConstraint(
+            "source_name",
+            "article_number",
+            "content_hash",
+            name="uq_legal_articles_source_article_hash",
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -17,4 +22,10 @@ class LegalArticle(Base):
     jurisdiction = Column(String, nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
     applicability_type = Column(String, nullable=False, default="otro")
+    source_type = Column(String, nullable=False, default="mock")
+    source_url = Column(String, nullable=True)
+    source_version = Column(String, nullable=True)
+    last_reform_date = Column(String, nullable=True)
+    content_hash = Column(String, nullable=False, index=True)
+    hierarchical_path = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 
 from db_ingest import get_articles_from_db
-from ingest import parse_articles
+from ingest import parse_all_sources
 from legal_rules import analyze_facts_deterministically, search_local_articles
 from schemas import FactInput, SearchInput
 
@@ -18,7 +18,7 @@ def load_articles() -> list[dict]:
         pass
 
     try:
-        return parse_articles()
+        return parse_all_sources()
     except FileNotFoundError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
