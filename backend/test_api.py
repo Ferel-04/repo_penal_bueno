@@ -8,6 +8,7 @@ from schemas import FactInput, SearchInput
 
 def setup_function():
     main.load_articles = parse_all_sources
+    main.extract_facts_with_local_llm = lambda facts: None
 
 
 def test_articles_endpoint_returns_all_mock_sources():
@@ -84,6 +85,9 @@ def test_analyze_endpoint_detects_topics_and_returns_grouped_candidates():
     )
 
     assert payload["human_review_required"] is True
+    assert payload["analysis_engine"] == "deterministic_fallback"
+    assert payload["structured_facts"] is None
+    assert payload["legal_assignment_engine"] == "deterministic_rules"
     assert payload["detected_legal_topics"] == ["familiar", "menor", "violencia", "amenaza"]
     assert payload["facts_summary"].startswith("La víctima menor")
     assert payload["missing_questions"] == [
@@ -124,6 +128,58 @@ def test_analyze_with_medida_de_proteccion_returns_procedural_foundations():
     assert any(
         article["classification"] == "fundamento_procesal"
         for article in candidates["procedural_foundations"]
+    )
+
+
+def test_analyze_uses_local_llm_when_structured_facts_are_valid():
+    main.extract_facts_with_local_llm = lambda facts: {
+        "sexual_conduct_detected": True,
+        "victim_age_group": "menor",
+        "relationship_to_aggressor": None,
+        "violence_detected": True,
+        "threat_detected": False,
+        "unconscious_detected": False,
+        "unable_to_resist_detected": False,
+        "explicit_crime_mentioned": None,
+    }
+
+    payload = main.analyze_facts(FactInput(facts="Relato sin palabras legales explícitas."))
+
+    assert payload["analysis_engine"] == "local_llm"
+    assert payload["structured_facts"]["sexual_conduct_detected"] is True
+    assert payload["legal_assignment_engine"] == "deterministic_rules"
+    assert "violación" in payload["detected_legal_topics"]
+    assert "menor" in payload["detected_legal_topics"]
+    assert payload["candidate_articles"]["penal_articles"]
+
+
+def test_analyze_does_not_ask_age_or_family_when_structured_as_adult_no_family():
+    main.extract_facts_with_local_llm = lambda facts: {
+        "sexual_conduct_detected": True,
+        "victim_age_group": "adulto",
+        "relationship_to_aggressor": "sin relación familiar",
+        "violence_detected": True,
+        "threat_detected": True,
+        "unconscious_detected": False,
+        "unable_to_resist_detected": False,
+        "explicit_crime_mentioned": None,
+    }
+
+    payload = main.analyze_facts(
+        FactInput(
+            facts=(
+                "La víctima tiene 21 años y no hay relación familiar con el agresor. "
+                "Refiere actos sexuales, violencia y amenazas."
+            )
+        )
+    )
+
+    assert "familiar" not in payload["detected_legal_topics"]
+    assert "menor" not in payload["detected_legal_topics"]
+    assert "¿La víctima era menor de quince años?" not in payload["missing_questions"]
+    assert (
+        "¿Existe relación familiar, custodia, guarda, educación o autoridad?"
+        not in payload["missing_questions"]
     )
 
 

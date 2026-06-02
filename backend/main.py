@@ -1,12 +1,25 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from db_ingest import get_articles_from_db
 from ingest import parse_all_sources
 from legal_rules import analyze_facts_deterministically, search_local_articles
+from local_llm import extract_facts_with_local_llm
 from schemas import FactInput, SearchInput
 
 
 app = FastAPI(title="MVP Asistente Penal Michoacán")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def load_articles() -> list[dict]:
@@ -61,7 +74,15 @@ def analyze_facts(input_data: FactInput):
     if not facts:
         raise HTTPException(status_code=400, detail="El campo facts no puede estar vacío.")
 
-    return analyze_facts_deterministically(facts, load_articles())
+    structured_facts = extract_facts_with_local_llm(facts)
+    analysis_engine = "local_llm" if structured_facts else "deterministic_fallback"
+
+    return analyze_facts_deterministically(
+        facts,
+        load_articles(),
+        structured_facts=structured_facts,
+        analysis_engine=analysis_engine,
+    )
 
 
 @app.post("/api/analyze")

@@ -29,6 +29,8 @@ def test_ingest_articles_uses_temp_sqlite_and_avoids_duplicates(tmp_path, monkey
     assert second_insert_count == 0
     assert [article["article_number"] for article in articles] == ["164", "165", "166"]
     assert all(article["content_hash"] for article in articles)
+    assert {article["source_version"] for article in articles} == {"2026-05-24"}
+    assert {article["last_reform_date"] for article in articles} == {"2026-05-24"}
 
 
 def test_ingest_all_sources_loads_articles_from_four_mock_sources(tmp_path, monkeypatch):
@@ -59,6 +61,14 @@ def test_ingest_all_sources_loads_articles_from_four_mock_sources(tmp_path, monk
         "Código Nacional de Procedimientos Penales MOCK",
         "Ley General de Víctimas MOCK",
         "Constitución Política de los Estados Unidos Mexicanos MOCK",
+    }
+    assert {article["source_version"] for article in articles} == {"2026-05-24"}
+    assert {article["last_reform_date"] for article in articles} == {"2026-05-24"}
+    assert {article["legal_domain"] for article in articles} == {
+        "penal",
+        "procesal",
+        "victimas",
+        "constitucional",
     }
 
 

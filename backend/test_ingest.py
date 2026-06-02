@@ -2,7 +2,15 @@ from pathlib import Path
 
 import pytest
 
-from ingest import JURISDICTION, SOURCE_NAME, generate_content_hash, parse_all_sources, parse_articles
+from ingest import (
+    JURISDICTION,
+    SOURCE_NAME,
+    MissingMetadataError,
+    generate_content_hash,
+    load_source_metadata,
+    parse_all_sources,
+    parse_articles,
+)
 
 
 def test_parse_articles_supports_basic_uppercase_and_bis_patterns(tmp_path: Path):
@@ -68,6 +76,38 @@ def test_parse_all_sources_loads_four_mock_sources():
         "Ley General de Víctimas MOCK",
         "Constitución Política de los Estados Unidos Mexicanos MOCK",
     }
+    assert {article["source_version"] for article in articles} == {"2026-05-24"}
+    assert {article["last_reform_date"] for article in articles} == {"2026-05-24"}
+    assert {article["source_type"] for article in articles} == {"official_text_manual_load"}
+    assert {article["legal_domain"] for article in articles} == {
+        "penal",
+        "procesal",
+        "victimas",
+        "constitucional",
+    }
+
+
+def test_load_source_metadata_reads_metadata_json():
+    metadata = load_source_metadata(
+        "backend/data/legal_sources/federal/cnpp/2026-05-24.txt"
+    )
+
+    assert metadata["source_name"] == "Código Nacional de Procedimientos Penales MOCK"
+    assert metadata["jurisdiction"] == "Federal"
+    assert metadata["source_type"] == "official_text_manual_load"
+    assert metadata["source_version"] == "2026-05-24"
+    assert metadata["last_reform_date"] == "2026-05-24"
+    assert metadata["legal_domain"] == "procesal"
+
+
+def test_parse_all_sources_raises_clear_error_when_metadata_is_missing(tmp_path: Path):
+    source_dir = tmp_path / "legal_sources"
+    source_file = source_dir / "federal" / "missing_metadata_source" / "2026-05-24.txt"
+    source_file.parent.mkdir(parents=True)
+    source_file.write_text("Artículo 1. Prueba.\nContenido.", encoding="utf-8")
+
+    with pytest.raises(MissingMetadataError, match="Falta metadata.json"):
+        parse_all_sources(source_dir)
 
 
 def test_parse_articles_raises_file_not_found_for_missing_file(tmp_path: Path):

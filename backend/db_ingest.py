@@ -15,6 +15,7 @@ TRACEABILITY_COLUMNS = {
     "source_url": "TEXT",
     "source_version": "TEXT",
     "last_reform_date": "TEXT",
+    "legal_domain": "TEXT",
     "content_hash": "TEXT",
     "hierarchical_path": "TEXT",
 }
@@ -113,6 +114,7 @@ def _rebuild_legal_articles_table(connection) -> None:
                 source_url,
                 source_version,
                 last_reform_date,
+                legal_domain,
                 content_hash,
                 hierarchical_path,
                 created_at
@@ -130,6 +132,7 @@ def _rebuild_legal_articles_table(connection) -> None:
                 source_url,
                 source_version,
                 last_reform_date,
+                legal_domain,
                 content_hash,
                 hierarchical_path,
                 created_at
@@ -162,6 +165,7 @@ def serialize_article(article: LegalArticle) -> dict:
         "source_url": article.source_url,
         "source_version": article.source_version,
         "last_reform_date": article.last_reform_date,
+        "legal_domain": article.legal_domain,
         "content_hash": article.content_hash,
         "hierarchical_path": article.hierarchical_path,
     }
@@ -214,17 +218,16 @@ def ingest_parsed_articles(parsed_articles: list[dict], db: Session | None = Non
             )
 
             if exact_article:
+                active_articles = get_active_articles_for_source_article(session, article)
+                for active_article in active_articles:
+                    if active_article.id != exact_article.id:
+                        active_article.is_active = False
+
+                exact_article.is_active = True
+                apply_article_metadata(exact_article, article)
                 continue
 
-            active_articles = (
-                session.query(LegalArticle)
-                .filter(
-                    LegalArticle.source_name == article["source_name"],
-                    LegalArticle.article_number == article["article_number"],
-                    LegalArticle.is_active.is_(True),
-                )
-                .all()
-            )
+            active_articles = get_active_articles_for_source_article(session, article)
 
             for active_article in active_articles:
                 active_article.is_active = False
@@ -242,6 +245,7 @@ def ingest_parsed_articles(parsed_articles: list[dict], db: Session | None = Non
                     source_url=article["source_url"],
                     source_version=article["source_version"],
                     last_reform_date=article["last_reform_date"],
+                    legal_domain=article.get("legal_domain"),
                     content_hash=article["content_hash"],
                     hierarchical_path=article["hierarchical_path"],
                 )
@@ -256,6 +260,30 @@ def ingest_parsed_articles(parsed_articles: list[dict], db: Session | None = Non
     finally:
         if owns_session:
             session.close()
+
+
+def get_active_articles_for_source_article(session: Session, article: dict) -> list[LegalArticle]:
+    return (
+        session.query(LegalArticle)
+        .filter(
+            LegalArticle.source_name == article["source_name"],
+            LegalArticle.article_number == article["article_number"],
+            LegalArticle.is_active.is_(True),
+        )
+        .all()
+    )
+
+
+def apply_article_metadata(stored_article: LegalArticle, parsed_article: dict) -> None:
+    stored_article.title = parsed_article["title"]
+    stored_article.content = parsed_article["content"]
+    stored_article.jurisdiction = parsed_article["jurisdiction"]
+    stored_article.source_type = parsed_article["source_type"]
+    stored_article.source_url = parsed_article["source_url"]
+    stored_article.source_version = parsed_article["source_version"]
+    stored_article.last_reform_date = parsed_article["last_reform_date"]
+    stored_article.legal_domain = parsed_article.get("legal_domain")
+    stored_article.hierarchical_path = parsed_article["hierarchical_path"]
 
 
 if __name__ == "__main__":

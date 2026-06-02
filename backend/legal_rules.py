@@ -99,7 +99,7 @@ def search_local_articles(query: str, articles: list[dict]) -> list[dict]:
     return results
 
 
-def detect_legal_topics(facts: str) -> list[str]:
+def detect_legal_topics(facts: str, structured_facts: dict | None = None) -> list[str]:
     normalized_facts = normalize_text(facts)
     detected_topics = []
 
@@ -107,7 +107,57 @@ def detect_legal_topics(facts: str) -> list[str]:
         if normalize_text(keyword) in normalized_facts:
             detected_topics.append(keyword)
 
+    for topic in topics_from_structured_facts(structured_facts):
+        if topic not in detected_topics:
+            detected_topics.append(topic)
+
+    detected_topics = apply_structured_topic_overrides(detected_topics, structured_facts)
+
     return detected_topics
+
+
+def apply_structured_topic_overrides(
+    detected_topics: list[str],
+    structured_facts: dict | None,
+) -> list[str]:
+    if not structured_facts:
+        return detected_topics
+
+    victim_age_group = normalize_text(structured_facts.get("victim_age_group") or "")
+    relationship = normalize_text(structured_facts.get("relationship_to_aggressor") or "")
+    filtered_topics = list(detected_topics)
+
+    if victim_age_group == "adulto" and "menor" in filtered_topics:
+        filtered_topics.remove("menor")
+    if relationship.startswith("sin relacion") and "familiar" in filtered_topics:
+        filtered_topics.remove("familiar")
+
+    return filtered_topics
+
+
+def topics_from_structured_facts(structured_facts: dict | None) -> list[str]:
+    if not structured_facts:
+        return []
+
+    topics = []
+    explicit_crime = normalize_text(structured_facts.get("explicit_crime_mentioned") or "")
+    victim_age_group = normalize_text(structured_facts.get("victim_age_group") or "")
+    relationship = normalize_text(structured_facts.get("relationship_to_aggressor") or "")
+
+    if structured_facts.get("sexual_conduct_detected") or "violacion" in explicit_crime:
+        topics.append("violación")
+    if "menor" in victim_age_group or "nina" in victim_age_group or "nino" in victim_age_group:
+        topics.append("menor")
+    if relationship and not relationship.startswith("sin relacion"):
+        topics.append("familiar")
+    if structured_facts.get("violence_detected"):
+        topics.append("violencia")
+    if structured_facts.get("threat_detected"):
+        topics.append("amenaza")
+    if structured_facts.get("unconscious_detected") or structured_facts.get("unable_to_resist_detected"):
+        topics.append("inconsciente")
+
+    return topics
 
 
 def summarize_facts(facts: str, max_length: int = 240) -> str:
@@ -117,23 +167,32 @@ def summarize_facts(facts: str, max_length: int = 240) -> str:
     return clean_facts[: max_length - 3].rstrip() + "..."
 
 
-def build_missing_questions(detected_topics: list[str]) -> list[str]:
+def build_missing_questions(
+    detected_topics: list[str],
+    structured_facts: dict | None = None,
+) -> list[str]:
     questions = []
+    victim_age_group = normalize_text((structured_facts or {}).get("victim_age_group") or "")
+    relationship = normalize_text((structured_facts or {}).get("relationship_to_aggressor") or "")
 
     if "violencia" not in detected_topics and "amenaza" not in detected_topics:
         questions.append("¿Se usó violencia física, violencia moral o amenazas?")
-    if "menor" not in detected_topics:
+    if "menor" not in detected_topics and not victim_age_group:
         questions.append("¿La víctima era menor de quince años?")
     if "inconsciente" not in detected_topics:
         questions.append("¿La víctima podía comprender el significado del hecho y resistirlo?")
-    if "familiar" not in detected_topics:
+    if "familiar" not in detected_topics and not relationship:
         questions.append("¿Existe relación familiar, custodia, guarda, educación o autoridad?")
 
     return questions
 
 
-def build_candidate_articles(facts: str, articles: list[dict]) -> list[dict]:
-    detected_topics = detect_legal_topics(facts)
+def build_candidate_articles(
+    facts: str,
+    articles: list[dict],
+    detected_topics: list[str] | None = None,
+) -> list[dict]:
+    detected_topics = detected_topics if detected_topics is not None else detect_legal_topics(facts)
     search_terms = []
 
     for topic in detected_topics:
@@ -193,14 +252,22 @@ def build_human_review_warnings(grouped_articles: dict) -> list[str]:
     return warnings
 
 
-def analyze_facts_deterministically(facts: str, articles: list[dict]) -> dict:
-    detected_topics = detect_legal_topics(facts)
-    candidate_articles = build_candidate_articles(facts, articles)
+def analyze_facts_deterministically(
+    facts: str,
+    articles: list[dict],
+    structured_facts: dict | None = None,
+    analysis_engine: str = "deterministic_fallback",
+) -> dict:
+    detected_topics = detect_legal_topics(facts, structured_facts)
+    candidate_articles = build_candidate_articles(facts, articles, detected_topics)
 
     return {
         "facts_summary": summarize_facts(facts),
         "detected_legal_topics": detected_topics,
+        "structured_facts": structured_facts,
         "candidate_articles": group_candidate_articles(candidate_articles),
-        "missing_questions": build_missing_questions(detected_topics),
+        "missing_questions": build_missing_questions(detected_topics, structured_facts),
         "human_review_required": True,
+        "analysis_engine": analysis_engine,
+        "legal_assignment_engine": "deterministic_rules",
     }

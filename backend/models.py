@@ -26,6 +26,7 @@ class LegalArticle(Base):
     source_url = Column(String, nullable=True)
     source_version = Column(String, nullable=True)
     last_reform_date = Column(String, nullable=True)
+    legal_domain = Column(String, nullable=True)
     content_hash = Column(String, nullable=False, index=True)
     hierarchical_path = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
