@@ -1,9 +1,9 @@
 {
-  "source_name": "Código Penal para el Estado de Michoacán MOCK",
+  "source_name": "Código Penal para el Estado de Michoacán de Ocampo",
   "jurisdiction": "Michoacán",
-  "source_type": "official_text_manual_load",
-  "source_url": "manual://michoacan/codigo_penal/2026-05-24",
-  "source_version": "2026-05-24",
-  "last_reform_date": "2026-05-24",
+  "source_type": "official_pdf_extract",
+  "source_url": "https://so.secoem.michoacan.gob.mx/wp-content/uploads/2025/01/codigo-penal-edo-mich.pdf",
+  "source_version": "2024-11-27",
+  "last_reform_date": "2024-11-27",
   "legal_domain": "penal"
 }

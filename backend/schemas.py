@@ -7,3 +7,4 @@ class SearchInput(BaseModel):
 
 class FactInput(BaseModel):
     facts: str
+    crime_type: str | None = None

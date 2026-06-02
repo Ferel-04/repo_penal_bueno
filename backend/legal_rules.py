@@ -1,5 +1,9 @@
 import unicodedata
 
+from crime_catalog import detect_crime_type
+from crime_classifier import classify_crime_type, get_crime_display_name, get_crime_subtype
+from investigation_steps import get_investigation_steps
+
 
 KEYWORD_SEARCH_TERMS = {
     "violación": [
@@ -30,6 +34,10 @@ def normalize_text(value: str) -> str:
     value = value.casefold()
     normalized = unicodedata.normalize("NFD", value)
     return "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+
+
+def contains_any(value: str, terms: list[str]) -> bool:
+    return any(normalize_text(term) in value for term in terms)
 
 
 def get_article_search_text(article: dict) -> str:
@@ -99,7 +107,59 @@ def search_local_articles(query: str, articles: list[dict]) -> list[dict]:
     return results
 
 
-def detect_legal_topics(facts: str, structured_facts: dict | None = None) -> list[str]:
+def detect_topics_from_text(facts: str, crime_type: str) -> list[str]:
+    from crime_catalog import get_crime_catalog_entry
+
+    normalized = normalize_text(facts)
+    entry = get_crime_catalog_entry(crime_type)
+    topics = []
+
+    if crime_type == "violacion":
+        topics.append("violación")
+
+    violence_keywords = [
+        "golpe",
+        "golpeo",
+        "golpeó",
+        "agredió",
+        "agredio",
+        "ataco",
+        "atacó",
+        "empujo",
+        "empujó",
+        "forcejeo",
+        "sometio",
+        "sometió",
+        "lesiono",
+        "lesionó",
+        "hiero",
+        "hirió",
+        "golpiza",
+    ]
+    if contains_any(normalized, violence_keywords):
+        topics.append("violencia")
+
+    threat_keywords = [
+        "amenaza",
+        "amenazo",
+        "amenazó",
+        "amenazan",
+        "matar",
+        "lastimar",
+        "dano",
+        "daño",
+    ]
+    if contains_any(normalized, threat_keywords):
+        topics.append("amenaza")
+
+    return topics
+
+
+def detect_legal_topics(
+    facts: str,
+    structured_facts: dict | None = None,
+    crime_type: str = "unknown",
+) -> list[str]:
     normalized_facts = normalize_text(facts)
     detected_topics = []
 
@@ -107,9 +167,14 @@ def detect_legal_topics(facts: str, structured_facts: dict | None = None) -> lis
         if normalize_text(keyword) in normalized_facts:
             detected_topics.append(keyword)
 
-    for topic in topics_from_structured_facts(structured_facts):
+    for topic in topics_from_structured_facts(structured_facts, crime_type):
         if topic not in detected_topics:
             detected_topics.append(topic)
+
+    if structured_facts is None:
+        for topic in detect_topics_from_text(facts, crime_type):
+            if topic not in detected_topics:
+                detected_topics.append(topic)
 
     detected_topics = apply_structured_topic_overrides(detected_topics, structured_facts)
 
@@ -135,7 +200,10 @@ def apply_structured_topic_overrides(
     return filtered_topics
 
 
-def topics_from_structured_facts(structured_facts: dict | None) -> list[str]:
+def topics_from_structured_facts(
+    structured_facts: dict | None,
+    crime_type: str = "unknown",
+) -> list[str]:
     if not structured_facts:
         return []
 
@@ -157,7 +225,20 @@ def topics_from_structured_facts(structured_facts: dict | None) -> list[str]:
     if structured_facts.get("unconscious_detected") or structured_facts.get("unable_to_resist_detected"):
         topics.append("inconsciente")
 
-    return topics
+    valid_topics_by_crime = {
+        "violacion": {"violación", "menor", "familiar", "violencia", "amenaza", "inconsciente"},
+        "robo": {"violencia", "amenaza"},
+        "lesiones": {"violencia", "amenaza"},
+        "homicidio": {"violencia", "amenaza"},
+        "violencia_familiar": {"violencia", "amenaza", "familiar", "menor"},
+        "fraude": set(),
+        "unknown": {"violación", "menor", "familiar", "violencia", "amenaza", "inconsciente"},
+    }
+
+    valid_topics = valid_topics_by_crime.get(crime_type, valid_topics_by_crime["unknown"])
+    filtered_topics = [topic for topic in topics if topic in valid_topics]
+
+    return filtered_topics
 
 
 def summarize_facts(facts: str, max_length: int = 240) -> str:
@@ -191,15 +272,20 @@ def build_candidate_articles(
     facts: str,
     articles: list[dict],
     detected_topics: list[str] | None = None,
+    crime_type: str = "unknown",
 ) -> list[dict]:
     detected_topics = detected_topics if detected_topics is not None else detect_legal_topics(facts)
     search_terms = []
 
     for topic in detected_topics:
-        search_terms.extend(KEYWORD_SEARCH_TERMS[topic])
+        if topic in KEYWORD_SEARCH_TERMS:
+            search_terms.extend(KEYWORD_SEARCH_TERMS[topic])
 
     if not search_terms:
-        search_terms = [facts]
+        from crime_catalog import get_crime_catalog_entry
+
+        entry = get_crime_catalog_entry(crime_type)
+        search_terms = entry.get("legal_search_terms", [facts])
 
     candidates_by_key = {}
     for term in search_terms:
@@ -257,9 +343,17 @@ def analyze_facts_deterministically(
     articles: list[dict],
     structured_facts: dict | None = None,
     analysis_engine: str = "deterministic_fallback",
+    crime_type: str | None = None,
 ) -> dict:
-    detected_topics = detect_legal_topics(facts, structured_facts)
-    candidate_articles = build_candidate_articles(facts, articles, detected_topics)
+    if crime_type is None:
+        crime_type = classify_crime_type(facts, structured_facts)
+    
+    crime_subtype = get_crime_subtype(crime_type, structured_facts)
+    crime_display_name = get_crime_display_name(crime_type)
+    investigation_steps = get_investigation_steps(crime_type, structured_facts)
+    
+    detected_topics = detect_legal_topics(facts, structured_facts, crime_type)
+    candidate_articles = build_candidate_articles(facts, articles, detected_topics, crime_type)
 
     return {
         "facts_summary": summarize_facts(facts),
@@ -270,4 +364,8 @@ def analyze_facts_deterministically(
         "human_review_required": True,
         "analysis_engine": analysis_engine,
         "legal_assignment_engine": "deterministic_rules",
+        "detected_crime_type": crime_type,
+        "crime_subtype": crime_subtype,
+        "crime_display_name": crime_display_name,
+        "investigation_steps": investigation_steps,
     }

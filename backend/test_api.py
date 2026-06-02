@@ -20,7 +20,6 @@ def test_articles_endpoint_returns_real_federal_sources():
     assert "C\u00f3digo Nacional de Procedimientos Penales" in source_names
     assert "Ley General de V\u00edctimas" in source_names
     assert "Constituci\u00f3n Pol\u00edtica de los Estados Unidos Mexicanos" in source_names
-    assert any("MOCK" in source_name for source_name in source_names)
     assert all(article["content_hash"] for article in payload["articles"])
     assert all("source_version" in article for article in payload["articles"])
     assert all("last_reform_date" in article for article in payload["articles"])
@@ -42,7 +41,7 @@ def test_search_endpoint_finds_text_matches_and_classifies_penal_results():
     }
     assert penal_classifications["164"] == "tipo_penal_base"
     assert penal_classifications["165"] == "violacion_equiparada"
-    assert penal_classifications["166"] == "agravante"
+    assert penal_classifications["168"] == "agravante"
 
 
 def test_search_endpoint_finds_cnpp_articles():
@@ -106,7 +105,7 @@ def test_analyze_endpoint_detects_topics_and_returns_grouped_candidates():
         article["article_number"]
         for article in candidates["penal_articles"]
     }
-    assert {"164", "165", "166"}.issubset(article_numbers)
+    assert {"164", "165"}.issubset(article_numbers)
 
 
 def test_analyze_with_violacion_returns_penal_articles_and_victim_rights():
@@ -190,3 +189,42 @@ def test_analyze_endpoint_rejects_empty_facts():
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "El campo facts no puede estar vac\u00edo."
+
+
+def test_analyze_returns_crime_type_and_investigation_steps():
+    payload = main.analyze_facts(
+        FactInput(
+            facts="El sujeto asaltó a la víctima con violencia física y le robó su cartera."
+        )
+    )
+
+    assert payload["detected_crime_type"] == "robo"
+    assert payload["crime_display_name"] == "Robo"
+    assert len(payload["investigation_steps"]) >= 3
+    assert all(
+        "step" in step and "legal_basis" in step and "urgent" in step and "category" in step
+        for step in payload["investigation_steps"]
+    )
+    assert any(step["urgent"] is True for step in payload["investigation_steps"])
+    assert payload["crime_subtype"] is None or isinstance(payload["crime_subtype"], str)
+
+
+def test_analyze_fraude_does_not_return_violencia_topic():
+    payload = main.analyze_facts(
+        FactInput(
+            facts="La víctima fue defraudada cuando le entregó dinero mediante pagarés y nunca lo pagó."
+        )
+    )
+
+    assert payload["detected_crime_type"] == "fraude"
+    assert "violencia" not in payload["detected_legal_topics"]
+
+
+def test_analyze_explicit_crime_type_overrides_detection():
+    payload = main.analyze_facts(
+        FactInput(facts="Texto genérico sin palabras clave de delito.", crime_type="homicidio")
+    )
+
+    assert payload["detected_crime_type"] == "homicidio"
+    assert payload["crime_display_name"] == "Homicidio"
+    assert len(payload["investigation_steps"]) >= 3

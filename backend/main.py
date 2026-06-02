@@ -82,6 +82,7 @@ def analyze_facts(input_data: FactInput):
         load_articles(),
         structured_facts=structured_facts,
         analysis_engine=analysis_engine,
+        crime_type=input_data.crime_type,
     )
 
 

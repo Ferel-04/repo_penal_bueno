@@ -173,20 +173,21 @@ def apply_deterministic_fact_guardrails(facts: str, extraction: dict) -> dict:
     ):
         guarded["sexual_conduct_detected"] = True
 
-    if contains_any(
-        normalized_facts,
-        [
-            "violencia",
-            "fuerza fisica",
-            "sujeto de los brazos",
-            "sujeto la",
-            "sujeto al",
-            "empujo",
-            "golpeo",
-            "forcejeo",
-            "sometio",
-        ],
-    ):
+    physical_violence_terms = [
+        "violencia",
+        "fuerza fisica",
+        "sujeto de los brazos",
+        "empujo",
+        "golpeo",
+        "golpe",
+        "forcejeo",
+        "sometio",
+        "ataco",
+        "agredio",
+        "jalon",
+    ]
+
+    if contains_any(normalized_facts, physical_violence_terms):
         guarded["violence_detected"] = True
 
     if contains_any(

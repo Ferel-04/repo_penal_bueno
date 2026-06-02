@@ -80,21 +80,19 @@ def test_parse_all_sources_loads_real_federal_sources():
         "Ley General de V\u00edctimas",
         "Constituci\u00f3n Pol\u00edtica de los Estados Unidos Mexicanos",
     }.issubset(source_names)
-    assert any("MOCK" in source_name for source_name in source_names)
     assert {article["source_version"] for article in articles} == {
-        "2026-05-24",
+        "2024-11-27",
         "2025-11-28",
         "2024-04-01",
         "2026-05-06",
     }
     assert {article["last_reform_date"] for article in articles} == {
-        "2026-05-24",
+        "2024-11-27",
         "2025-11-28",
         "2024-04-01",
         "2026-05-06",
     }
     assert {article["source_type"] for article in articles} == {
-        "official_text_manual_load",
         "official_pdf_extract",
     }
     assert {article["legal_domain"] for article in articles} == {
@@ -120,7 +118,7 @@ def test_load_source_metadata_reads_metadata_json():
 
 def test_parse_all_sources_raises_clear_error_when_metadata_is_missing(tmp_path: Path):
     source_dir = tmp_path / "legal_sources"
-    source_file = source_dir / "federal" / "missing_metadata_source" / "2026-05-24.txt"
+    source_file = source_dir / "federal" / "missing_metadata_source" / "2024-11-27.txt"
     source_file.parent.mkdir(parents=True)
     source_file.write_text("Articulo 1. Prueba.\nContenido.", encoding="utf-8")
 
