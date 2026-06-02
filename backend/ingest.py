@@ -74,7 +74,7 @@ SOURCE_LOAD_ORDER = [
 
 ARTICLE_PATTERN = re.compile(
     r"(?im)^[^\S\r\n]*(?:art(?:[ií]culo)?\.?)\s+"
-    r"(\d+(?:[^\S\r\n]*(?:-| )[^\S\r\n]*bis)?)"
+    r"(\d+(?:(?:o|º)|[^\S\r\n]*(?:-| )[^\S\r\n]*bis)?)"
     r"[^\S\r\n]*(?:\.[^\S\r\n]*(.*?))?[^\S\r\n]*$"
 )
 
@@ -85,7 +85,11 @@ class MissingMetadataError(FileNotFoundError):
 
 def normalize_article_number(value: str) -> str:
     value = re.sub(r"\s*-\s*", " ", value)
-    return " ".join(value.title().split())
+    normalized = " ".join(value.split())
+    normalized = re.sub(r"^(\d+)[oOº]$", r"\1o", normalized)
+    if re.search(r"(?i)\bbis$", normalized):
+        return normalized.title()
+    return normalized
 
 
 def generate_content_hash(article_number: str, title: str | None, content: str) -> str:

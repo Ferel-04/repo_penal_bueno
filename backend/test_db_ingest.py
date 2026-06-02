@@ -33,7 +33,7 @@ def test_ingest_articles_uses_temp_sqlite_and_avoids_duplicates(tmp_path, monkey
     assert {article["last_reform_date"] for article in articles} == {"2026-05-24"}
 
 
-def test_ingest_all_sources_loads_articles_from_four_mock_sources(tmp_path, monkeypatch):
+def test_ingest_all_sources_loads_real_federal_sources(tmp_path, monkeypatch):
     temp_db_path = tmp_path / "test_legal_sources.db"
     temp_engine = create_engine(
         f"sqlite:///{temp_db_path.as_posix()}",
@@ -51,19 +51,27 @@ def test_ingest_all_sources_loads_articles_from_four_mock_sources(tmp_path, monk
     finally:
         session.close()
 
-    assert inserted_count == 13
-    assert len(articles) == 13
-    assert {
-        article["source_name"]
-        for article in articles
-    } == {
-        "Código Penal para el Estado de Michoacán MOCK",
-        "Código Nacional de Procedimientos Penales MOCK",
-        "Ley General de Víctimas MOCK",
-        "Constitución Política de los Estados Unidos Mexicanos MOCK",
+    assert inserted_count > 800
+    assert len(articles) == inserted_count
+    assert {article["source_name"] for article in articles}.issuperset(
+        {
+            "C\u00f3digo Nacional de Procedimientos Penales",
+            "Ley General de V\u00edctimas",
+            "Constituci\u00f3n Pol\u00edtica de los Estados Unidos Mexicanos",
+        }
+    )
+    assert {article["source_version"] for article in articles} == {
+        "2026-05-24",
+        "2025-11-28",
+        "2024-04-01",
+        "2026-05-06",
     }
-    assert {article["source_version"] for article in articles} == {"2026-05-24"}
-    assert {article["last_reform_date"] for article in articles} == {"2026-05-24"}
+    assert {article["last_reform_date"] for article in articles} == {
+        "2026-05-24",
+        "2025-11-28",
+        "2024-04-01",
+        "2026-05-06",
+    }
     assert {article["legal_domain"] for article in articles} == {
         "penal",
         "procesal",
@@ -82,12 +90,12 @@ def test_ingest_articles_keeps_history_when_content_changes(tmp_path, monkeypatc
 
     first_source = tmp_path / "first_version.txt"
     first_source.write_text(
-        "Artículo 1. Prueba.\nContenido inicial.",
+        "Articulo 1. Prueba.\nContenido inicial.",
         encoding="utf-8",
     )
     second_source = tmp_path / "second_version.txt"
     second_source.write_text(
-        "Artículo 1. Prueba.\nContenido reformado.",
+        "Articulo 1. Prueba.\nContenido reformado.",
         encoding="utf-8",
     )
 

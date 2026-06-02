@@ -11,37 +11,38 @@ def setup_function():
     main.extract_facts_with_local_llm = lambda facts: None
 
 
-def test_articles_endpoint_returns_all_mock_sources():
+def test_articles_endpoint_returns_real_federal_sources():
     payload = main.get_articles()
 
-    assert payload["total_articles"] == 13
+    assert payload["total_articles"] > 800
 
     source_names = {article["source_name"] for article in payload["articles"]}
-    assert "Código Penal para el Estado de Michoacán MOCK" in source_names
-    assert "Código Nacional de Procedimientos Penales MOCK" in source_names
-    assert "Ley General de Víctimas MOCK" in source_names
-    assert "Constitución Política de los Estados Unidos Mexicanos MOCK" in source_names
+    assert "C\u00f3digo Nacional de Procedimientos Penales" in source_names
+    assert "Ley General de V\u00edctimas" in source_names
+    assert "Constituci\u00f3n Pol\u00edtica de los Estados Unidos Mexicanos" in source_names
+    assert any("MOCK" in source_name for source_name in source_names)
     assert all(article["content_hash"] for article in payload["articles"])
     assert all("source_version" in article for article in payload["articles"])
     assert all("last_reform_date" in article for article in payload["articles"])
 
 
 def test_search_endpoint_finds_text_matches_and_classifies_penal_results():
-    payload = main.search_articles(SearchInput(query="violación"))
+    payload = main.search_articles(SearchInput(query="violaci\u00f3n"))
 
-    assert payload["query"] == "violación"
-    assert payload["total_results"] == 3
+    assert payload["query"] == "violaci\u00f3n"
+    assert payload["total_results"] >= 3
     assert all(result["content_hash"] for result in payload["results"])
     assert all("source_version" in result for result in payload["results"])
     assert all("last_reform_date" in result for result in payload["results"])
 
-    classifications = {
+    penal_classifications = {
         result["article_number"]: result["classification"]
         for result in payload["results"]
+        if "C\u00f3digo Penal" in result["source_name"]
     }
-    assert classifications["164"] == "tipo_penal_base"
-    assert classifications["165"] == "violacion_equiparada"
-    assert classifications["166"] == "agravante"
+    assert penal_classifications["164"] == "tipo_penal_base"
+    assert penal_classifications["165"] == "violacion_equiparada"
+    assert penal_classifications["166"] == "agravante"
 
 
 def test_search_endpoint_finds_cnpp_articles():
@@ -50,18 +51,18 @@ def test_search_endpoint_finds_cnpp_articles():
     assert payload["total_results"] >= 1
     assert any(
         result["classification"] == "fundamento_procesal"
-        and result["source_name"] == "Código Nacional de Procedimientos Penales MOCK"
+        and result["source_name"] == "C\u00f3digo Nacional de Procedimientos Penales"
         for result in payload["results"]
     )
 
 
 def test_search_endpoint_finds_lgv_articles():
-    payload = main.search_articles(SearchInput(query="reparación integral"))
+    payload = main.search_articles(SearchInput(query="reparaci\u00f3n integral"))
 
     assert payload["total_results"] >= 1
     assert any(
         result["classification"] == "derecho_victima"
-        and result["source_name"] == "Ley General de Víctimas MOCK"
+        and result["source_name"] == "Ley General de V\u00edctimas"
         for result in payload["results"]
     )
 
@@ -71,15 +72,15 @@ def test_search_endpoint_rejects_empty_query():
         main.search_articles(SearchInput(query="   "))
 
     assert exc_info.value.status_code == 400
-    assert exc_info.value.detail == "El campo query no puede estar vacío."
+    assert exc_info.value.detail == "El campo query no puede estar vac\u00edo."
 
 
 def test_analyze_endpoint_detects_topics_and_returns_grouped_candidates():
     payload = main.analyze_facts(
         FactInput(
             facts=(
-                "La víctima menor fue amenazada con violencia y existe una posible "
-                "relación familiar."
+                "La v\u00edctima menor fue amenazada con violencia y existe una posible "
+                "relaci\u00f3n familiar."
             )
         )
     )
@@ -89,9 +90,9 @@ def test_analyze_endpoint_detects_topics_and_returns_grouped_candidates():
     assert payload["structured_facts"] is None
     assert payload["legal_assignment_engine"] == "deterministic_rules"
     assert payload["detected_legal_topics"] == ["familiar", "menor", "violencia", "amenaza"]
-    assert payload["facts_summary"].startswith("La víctima menor")
+    assert payload["facts_summary"].startswith("La v\u00edctima menor")
     assert payload["missing_questions"] == [
-        "¿La víctima podía comprender el significado del hecho y resistirlo?"
+        "\u00bfLa v\u00edctima pod\u00eda comprender el significado del hecho y resistirlo?"
     ]
 
     candidates = payload["candidate_articles"]
@@ -110,7 +111,7 @@ def test_analyze_endpoint_detects_topics_and_returns_grouped_candidates():
 
 def test_analyze_with_violacion_returns_penal_articles_and_victim_rights():
     payload = main.analyze_facts(
-        FactInput(facts="Hechos posiblemente relacionados con violación contra una víctima.")
+        FactInput(facts="Hechos posiblemente relacionados con violaci\u00f3n contra una v\u00edctima.")
     )
 
     candidates = payload["candidate_articles"]
@@ -120,7 +121,7 @@ def test_analyze_with_violacion_returns_penal_articles_and_victim_rights():
 
 def test_analyze_with_medida_de_proteccion_returns_procedural_foundations():
     payload = main.analyze_facts(
-        FactInput(facts="Se requiere medida de protección urgente para la víctima.")
+        FactInput(facts="Se requiere medida de protecci\u00f3n urgente para la v\u00edctima.")
     )
 
     candidates = payload["candidate_articles"]
@@ -143,12 +144,12 @@ def test_analyze_uses_local_llm_when_structured_facts_are_valid():
         "explicit_crime_mentioned": None,
     }
 
-    payload = main.analyze_facts(FactInput(facts="Relato sin palabras legales explícitas."))
+    payload = main.analyze_facts(FactInput(facts="Relato sin palabras legales expl\u00edcitas."))
 
     assert payload["analysis_engine"] == "local_llm"
     assert payload["structured_facts"]["sexual_conduct_detected"] is True
     assert payload["legal_assignment_engine"] == "deterministic_rules"
-    assert "violación" in payload["detected_legal_topics"]
+    assert "violaci\u00f3n" in payload["detected_legal_topics"]
     assert "menor" in payload["detected_legal_topics"]
     assert payload["candidate_articles"]["penal_articles"]
 
@@ -157,7 +158,7 @@ def test_analyze_does_not_ask_age_or_family_when_structured_as_adult_no_family()
     main.extract_facts_with_local_llm = lambda facts: {
         "sexual_conduct_detected": True,
         "victim_age_group": "adulto",
-        "relationship_to_aggressor": "sin relación familiar",
+        "relationship_to_aggressor": "sin relaci\u00f3n familiar",
         "violence_detected": True,
         "threat_detected": True,
         "unconscious_detected": False,
@@ -168,7 +169,7 @@ def test_analyze_does_not_ask_age_or_family_when_structured_as_adult_no_family()
     payload = main.analyze_facts(
         FactInput(
             facts=(
-                "La víctima tiene 21 años y no hay relación familiar con el agresor. "
+                "La v\u00edctima tiene 21 a\u00f1os y no hay relaci\u00f3n familiar con el agresor. "
                 "Refiere actos sexuales, violencia y amenazas."
             )
         )
@@ -176,9 +177,9 @@ def test_analyze_does_not_ask_age_or_family_when_structured_as_adult_no_family()
 
     assert "familiar" not in payload["detected_legal_topics"]
     assert "menor" not in payload["detected_legal_topics"]
-    assert "¿La víctima era menor de quince años?" not in payload["missing_questions"]
+    assert "\u00bfLa v\u00edctima era menor de quince a\u00f1os?" not in payload["missing_questions"]
     assert (
-        "¿Existe relación familiar, custodia, guarda, educación o autoridad?"
+        "\u00bfExiste relaci\u00f3n familiar, custodia, guarda, educaci\u00f3n o autoridad?"
         not in payload["missing_questions"]
     )
 
@@ -188,4 +189,4 @@ def test_analyze_endpoint_rejects_empty_facts():
         main.analyze_facts(FactInput(facts=""))
 
     assert exc_info.value.status_code == 400
-    assert exc_info.value.detail == "El campo facts no puede estar vacío."
+    assert exc_info.value.detail == "El campo facts no puede estar vac\u00edo."
