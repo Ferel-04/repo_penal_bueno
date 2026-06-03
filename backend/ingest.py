@@ -103,8 +103,21 @@ def generate_content_hash(article_number: str, title: str | None, content: str) 
     return hashlib.sha256(canonical_text.encode("utf-8")).hexdigest()
 
 
+def _resolve_source_path(filepath: Path) -> Path:
+    resolved = filepath.resolve()
+    if resolved.exists():
+        return resolved
+    parts = filepath.parts
+    if parts and parts[0] == "backend":
+        stripped = Path(*parts[1:])
+        candidate = Path(__file__).resolve().parent / stripped
+        if candidate.exists():
+            return candidate
+    return resolved
+
+
 def load_source_metadata(filepath: str | Path, source_root: str | Path = LEGAL_SOURCES_DIR) -> dict:
-    path = Path(filepath)
+    path = _resolve_source_path(Path(filepath))
     metadata_path = path.parent / "metadata.json"
 
     if metadata_path.exists():
