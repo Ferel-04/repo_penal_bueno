@@ -81,6 +81,8 @@ class LocalFactExtraction(BaseModel):
             "no especificada",
         }:
             return None
+        if isinstance(value, str) and normalized_value.startswith("no se menciono"):
+            return None
         return value
 
 
@@ -154,6 +156,8 @@ def apply_deterministic_fact_guardrails(facts: str, extraction: dict) -> dict:
     age_group = detect_age_group(normalized_facts)
     if age_group:
         guarded["victim_age_group"] = age_group
+    elif should_clear_non_victim_minor_age(normalized_facts, guarded.get("victim_age_group")):
+        guarded["victim_age_group"] = None
 
     relationship = detect_relationship_to_aggressor(normalized_facts)
     if relationship:
@@ -197,6 +201,10 @@ def apply_deterministic_fact_guardrails(facts: str, extraction: dict) -> dict:
             "amenazo",
             "amenazada",
             "amenazado",
+            "privar de la vida",
+            "privarla de la vida",
+            "privarlo de la vida",
+            "amenaza de muerte",
             "si gritaba",
             "lastimar",
             "hacer dano",
@@ -227,6 +235,10 @@ def apply_deterministic_fact_guardrails(facts: str, extraction: dict) -> dict:
     explicit_crime = detect_explicit_crime(normalized_facts)
     if explicit_crime:
         guarded["explicit_crime_mentioned"] = explicit_crime
+    elif isinstance(guarded.get("explicit_crime_mentioned"), str) and normalize_text(
+        guarded["explicit_crime_mentioned"]
+    ).strip(" .").startswith("no se menciono"):
+        guarded["explicit_crime_mentioned"] = None
 
     return guarded
 
@@ -242,7 +254,10 @@ def contains_any(value: str, terms: list[str]) -> bool:
 
 
 def detect_age_group(normalized_facts: str) -> str | None:
-    age_match = re.search(r"\b(\d{1,2})\s+anos\b", normalized_facts)
+    age_match = re.search(
+        r"\b(?:victima|ofendida|ofendido|persona agredida)\b.{0,40}?\b(\d{1,2})\s+anos\b",
+        normalized_facts,
+    )
     if age_match:
         age = int(age_match.group(1))
         if age < 15:
@@ -251,14 +266,54 @@ def detect_age_group(normalized_facts: str) -> str | None:
             return "menor de edad"
         return "adulto"
 
-    if contains_any(normalized_facts, ["menor de quince", "menor de 15", "14 anos", "13 anos"]):
+    if re.search(
+        r"\b(?:victima|ofendida|ofendido|persona agredida|sujeto pasivo)\b.{0,50}?"
+        r"(?:menor de quince|menor de 15|14 anos|13 anos)",
+        normalized_facts,
+    ):
         return "menor de quince años"
-    if contains_any(normalized_facts, ["menor de edad", "victima menor", "adolescente", "nina", "nino"]):
+    if contains_any(
+        normalized_facts,
+        [
+            "victima menor",
+            "victima adolescente",
+            "victima nina",
+            "victima nino",
+            "ofendida menor",
+            "ofendido menor",
+            "persona agredida menor",
+        ],
+    ):
         return "menor de edad"
-    if contains_any(normalized_facts, ["mayor de edad", "persona adulta"]):
+    if re.search(
+        r"\b(?:victima|ofendida|ofendido|persona agredida)\b.{0,50}?"
+        r"(?:mayor de edad|persona adulta)",
+        normalized_facts,
+    ):
         return "adulto"
 
     return None
+
+
+def should_clear_non_victim_minor_age(normalized_facts: str, extracted_age_group: str | None) -> bool:
+    if not extracted_age_group or "menor" not in normalize_text(extracted_age_group):
+        return False
+
+    if detect_age_group(normalized_facts):
+        return False
+
+    return contains_any(
+        normalized_facts,
+        [
+            "hijos menores",
+            "hijas menores",
+            "hijos menores de edad",
+            "hijas menores de edad",
+            "menores de edad, de",
+            "testigos presenciales",
+            "menores testigos",
+        ],
+    )
 
 
 def detect_relationship_to_aggressor(normalized_facts: str) -> str | None:
@@ -282,6 +337,9 @@ def detect_relationship_to_aggressor(normalized_facts: str) -> str | None:
         "tutor": "tutor",
         "pareja": "pareja",
         "ex pareja": "ex pareja",
+        "conyuge": "cónyuge",
+        "domicilio conyugal": "cónyuge",
+        "matrimonio": "cónyuge",
         "custodia": "custodia",
     }
     for term, label in family_terms.items():
@@ -292,6 +350,8 @@ def detect_relationship_to_aggressor(normalized_facts: str) -> str | None:
 
 
 def detect_explicit_crime(normalized_facts: str) -> str | None:
+    if "violencia familiar" in normalized_facts or "violencia intrafamiliar" in normalized_facts:
+        return "violencia familiar"
     if "violacion" in normalized_facts:
         return "violación"
     if "abuso sexual" in normalized_facts:

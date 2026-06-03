@@ -156,3 +156,29 @@ def test_deterministic_guardrails_correct_obvious_llm_misses():
     assert guarded["relationship_to_aggressor"] == "sin relación familiar"
     assert guarded["violence_detected"] is True
     assert guarded["threat_detected"] is True
+
+
+def test_guardrails_do_not_assign_child_witness_age_to_direct_victim():
+    extraction = {
+        "sexual_conduct_detected": False,
+        "victim_age_group": "menor de quince a\u00f1os",
+        "relationship_to_aggressor": None,
+        "violence_detected": True,
+        "threat_detected": True,
+        "unconscious_detected": False,
+        "unable_to_resist_detected": False,
+        "explicit_crime_mentioned": "No se mencion\u00f3 un crimen explicito.",
+    }
+
+    guarded = local_llm.apply_deterministic_fact_guardrails(
+        (
+            "El agresor golpe\u00f3 a la v\u00edctima, su c\u00f3nyuge, en el domicilio conyugal. "
+            "Sus dos hijos menores de edad, de 8 y 5 a\u00f1os respectivamente, fueron "
+            "testigos presenciales de las agresiones."
+        ),
+        extraction,
+    )
+
+    assert guarded["victim_age_group"] is None
+    assert guarded["relationship_to_aggressor"] == "c\u00f3nyuge"
+    assert guarded["explicit_crime_mentioned"] is None

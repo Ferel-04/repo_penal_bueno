@@ -1,17 +1,23 @@
+import unicodedata
+
 from crime_catalog import (
     CRIME_CATALOG,
     detect_crime_type,
-    get_crime_catalog_entry,
     get_active_subtypes,
 )
+
+
+def normalize_alias(value: str) -> str:
+    value = value.casefold()
+    normalized = unicodedata.normalize("NFD", value)
+    return "".join(char for char in normalized if unicodedata.category(char) != "Mn")
 
 
 def classify_crime_type(
     facts: str,
     structured_facts: dict | None = None,
 ) -> str:
-    CRIME_ALIASES = {
-        "violación": "violacion",
+    crime_aliases = {
         "violacion": "violacion",
         "abuso sexual": "violacion",
         "robo": "robo",
@@ -19,25 +25,31 @@ def classify_crime_type(
         "hurto": "robo",
         "lesiones": "lesiones",
         "golpes": "lesiones",
-        "lesión": "lesiones",
+        "lesion": "lesiones",
         "homicidio": "homicidio",
         "asesinato": "homicidio",
         "feminicidio": "homicidio",
         "violencia familiar": "violencia_familiar",
-        "violencia doméstica": "violencia_familiar",
+        "violencia domestica": "violencia_familiar",
         "fraude": "fraude",
         "estafa": "fraude",
-        "defraudación": "fraude",
+        "defraudacion": "fraude",
     }
 
     if structured_facts:
         explicit_crime = structured_facts.get("explicit_crime_mentioned")
         if explicit_crime and isinstance(explicit_crime, str):
-            explicit_crime_lower = explicit_crime.strip().lower()
-            if explicit_crime_lower in CRIME_ALIASES:
-                return CRIME_ALIASES[explicit_crime_lower]
+            explicit_crime_lower = normalize_alias(explicit_crime).strip()
+            if explicit_crime_lower in crime_aliases:
+                return crime_aliases[explicit_crime_lower]
 
     detected_type = detect_crime_type(facts)
+    if structured_facts and detected_type in {"unknown", "lesiones"}:
+        violence_detected = structured_facts.get("violence_detected")
+        relationship = structured_facts.get("relationship_to_aggressor")
+        if violence_detected is True and relationship and isinstance(relationship, str) and relationship.strip():
+            return "violencia_familiar"
+
     if detected_type != "unknown":
         return detected_type
 

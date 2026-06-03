@@ -26,7 +26,9 @@ def load_articles() -> list[dict]:
     try:
         db_articles = get_articles_from_db()
         if db_articles:
-            return db_articles
+            has_mock = any("MOCK" in (a.get("source_name") or "") for a in db_articles)
+            if not has_mock:
+                return db_articles
     except Exception:
         pass
 

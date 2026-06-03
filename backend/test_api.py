@@ -1,6 +1,7 @@
 import pytest
 from fastapi import HTTPException
 
+import local_llm
 import main
 from ingest import parse_all_sources
 from schemas import FactInput, SearchInput
@@ -105,7 +106,19 @@ def test_analyze_endpoint_detects_topics_and_returns_grouped_candidates():
         article["article_number"]
         for article in candidates["penal_articles"]
     }
-    assert {"164", "165"}.issubset(article_numbers)
+    assert len(article_numbers) == 0
+
+    procedural_numbers = {
+        article["article_number"]
+        for article in candidates["procedural_foundations"]
+    }
+    assert {"131", "154", "219"}.issubset(procedural_numbers)
+
+    victim_numbers = {
+        article["article_number"]
+        for article in candidates["victim_rights"]
+    }
+    assert {"7", "12"}.issubset(victim_numbers)
 
 
 def test_analyze_with_violacion_returns_penal_articles_and_victim_rights():
@@ -228,3 +241,40 @@ def test_analyze_explicit_crime_type_overrides_detection():
     assert payload["detected_crime_type"] == "homicidio"
     assert payload["crime_display_name"] == "Homicidio"
     assert len(payload["investigation_steps"]) >= 3
+
+
+def test_analyze_spousal_repeated_violence_returns_family_violence_article():
+    raw_extraction = {
+        "sexual_conduct_detected": False,
+        "victim_age_group": "menor de quince a\u00f1os",
+        "relationship_to_aggressor": None,
+        "violence_detected": True,
+        "threat_detected": True,
+        "unconscious_detected": False,
+        "unable_to_resist_detected": False,
+        "explicit_crime_mentioned": "No se mencion\u00f3 un crimen explicito.",
+    }
+    main.extract_facts_with_local_llm = (
+        lambda facts: local_llm.apply_deterministic_fact_guardrails(facts, raw_extraction)
+    )
+
+    facts = (
+        "El d\u00eda 15 de mayo de 2025, el C. Juan P\u00e9rez Garc\u00eda lleg\u00f3 en estado de "
+        "ebriedad al domicilio conyugal. Agredi\u00f3 f\u00edsicamente a la v\u00edctima, su "
+        "c\u00f3nyuge, con golpes en el rostro y brazos, caus\u00e1ndole hematomas visibles. "
+        "El agresor amenaz\u00f3 a la v\u00edctima con privarla de la vida. Los hechos no son "
+        "aislados; lleva dos a\u00f1os ejerciendo violencia f\u00edsica y psicol\u00f3gica de "
+        "manera reiterada contra la v\u00edctima y contra sus dos hijos menores de edad, "
+        "de 8 y 5 a\u00f1os, quienes han sido testigos presenciales."
+    )
+
+    payload = main.analyze_facts(FactInput(facts=facts))
+    penal_articles = payload["candidate_articles"]["penal_articles"]
+
+    assert payload["detected_crime_type"] == "violencia_familiar"
+    assert payload["structured_facts"]["victim_age_group"] is None
+    assert payload["structured_facts"]["relationship_to_aggressor"] == "c\u00f3nyuge"
+    penal_numbers = [article["article_number"] for article in penal_articles]
+    assert "178" in penal_numbers
+    assert {"178", "125", "126", "131"}.issubset(set(penal_numbers))
+    assert all(article["article_number"] != "164" for article in penal_articles)

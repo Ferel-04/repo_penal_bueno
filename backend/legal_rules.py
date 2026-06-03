@@ -1,5 +1,6 @@
 import unicodedata
 
+from article_map import get_mapped_articles
 from crime_catalog import detect_crime_type
 from crime_classifier import classify_crime_type, get_crime_display_name, get_crime_subtype
 from investigation_steps import get_investigation_steps
@@ -8,25 +9,38 @@ from investigation_steps import get_investigation_steps
 KEYWORD_SEARCH_TERMS = {
     "violación": [
         "violacion",
-        "victima",
-        "asesoria juridica",
-        "reparacion integral",
-        "derechos humanos",
+        "copula",
+        "abuso sexual",
+        "violacion equiparada",
     ],
-    "familiar": ["ascendiente", "descendiente", "hermano", "tutor", "custodia"],
-    "menor": ["menor", "quince años"],
-    "violencia": ["violencia"],
-    "inconsciente": ["no tenga la capacidad", "no pueda resistirlo"],
-    "amenaza": ["violencia moral"],
+    "familiar": ["ascendiente", "descendiente", "tutor", "custodia"],
+    "menor": ["menor de quince", "menor de edad", "menor de dieciocho"],
+    "violencia": [
+        "violencia fisica",
+        "violencia psicologica",
+        "violencia contra la victima",
+        "victima de violencia",
+    ],
+    "inconsciente": ["no tenga la capacidad", "no pueda resistirlo", "privada de razon"],
+    "amenaza": [
+        "amenaza a la victima",
+        "amenazas graves",
+    ],
     "medida de protección": [
         "medida de proteccion",
-        "medidas de proteccion",
-        "medidas cautelares",
+        "orden de proteccion",
+        "medidas de proteccion para la victima",
     ],
-    "audiencia": ["audiencia"],
-    "asesoría jurídica": ["asesoria juridica"],
-    "reparación integral": ["reparacion integral"],
-    "debido proceso": ["debido proceso"],
+    "asesoría jurídica": [
+        "asesor juridico de la victima",
+        "asesor juridico victimal",
+    ],
+    "reparación integral": [
+        "reparacion integral del dano",
+        "reparacion a la victima",
+    ],
+    "debido proceso": ["debido proceso", "garantias procesales"],
+    "audiencia": ["audiencia inicial", "audiencia de formulacion"],
 }
 
 
@@ -54,6 +68,8 @@ def get_article_search_text(article: dict) -> str:
 def classify_article(article: dict) -> str:
     source_name = normalize_text(article.get("source_name") or "")
     article_text = normalize_text(get_article_search_text(article))
+    legal_domain = normalize_text(article.get("legal_domain") or "")
+    applicability_type = normalize_text(article.get("applicability_type") or "")
 
     if "codigo nacional de procedimientos penales" in source_name:
         return "fundamento_procesal"
@@ -61,20 +77,31 @@ def classify_article(article: dict) -> str:
         return "derecho_victima"
     if "constitucion" in source_name:
         return "fundamento_constitucional"
-    if "codigo penal" in source_name:
-        if "agravante" in article_text or "aumentaran" in article_text:
-            return "agravante"
-        if "equiparada" in article_text:
-            return "violacion_equiparada"
-        if "violacion" in article_text:
-            return "tipo_penal_base"
 
-    if "agravante" in article_text or "aumentaran" in article_text:
-        return "agravante"
-    if "equiparada" in article_text:
-        return "violacion_equiparada"
-    if "violacion" in article_text:
-        return "tipo_penal_base"
+    if "codigo penal" in source_name:
+        if applicability_type in {"agravante", "violacion_equiparada",
+                                   "tipo_penal_base", "fundamento_procesal",
+                                   "derecho_victima", "fundamento_constitucional"}:
+            return applicability_type
+        content = normalize_text(article.get("content") or "")
+        if "se equipara" in content and "violacion" in content:
+            return "violacion_equiparada"
+        if "se equipara" in content and "robo" in content:
+            return "tipo_penal_base"
+        if "violencia familiar" in article_text:
+            return "tipo_penal_base"
+        if any(t in content for t in ["agravante", "se aumentara", "se aumentaran"]):
+            return "agravante"
+        if "violacion" in content:
+            return "tipo_penal_base"
+        if "lesiones" in content or "dano en la salud" in content:
+            return "tipo_penal_base"
+        if "homicidio" in content or "privar de la vida" in content:
+            return "tipo_penal_base"
+        if "robo" in content or "apoderamiento" in content:
+            return "tipo_penal_base"
+        return "otro"
+
     return "otro"
 
 
@@ -178,6 +205,12 @@ def detect_legal_topics(
 
     detected_topics = apply_structured_topic_overrides(detected_topics, structured_facts)
 
+    if crime_type == "violencia_familiar" and "menor" in detected_topics:
+        sf = structured_facts or {}
+        victim_age = normalize_text(sf.get("victim_age_group") or "")
+        if "menor" not in victim_age and "nina" not in victim_age and "nino" not in victim_age:
+            detected_topics = [t for t in detected_topics if t != "menor"]
+
     return detected_topics
 
 
@@ -251,6 +284,7 @@ def summarize_facts(facts: str, max_length: int = 240) -> str:
 def build_missing_questions(
     detected_topics: list[str],
     structured_facts: dict | None = None,
+    crime_type: str = "unknown",
 ) -> list[str]:
     questions = []
     victim_age_group = normalize_text((structured_facts or {}).get("victim_age_group") or "")
@@ -260,8 +294,11 @@ def build_missing_questions(
         questions.append("¿Se usó violencia física, violencia moral o amenazas?")
     if "menor" not in detected_topics and not victim_age_group:
         questions.append("¿La víctima era menor de quince años?")
-    if "inconsciente" not in detected_topics:
-        questions.append("¿La víctima podía comprender el significado del hecho y resistirlo?")
+    if crime_type in {"violacion", "unknown"}:
+        if "inconsciente" not in detected_topics:
+            questions.append(
+                "¿La víctima podía comprender el significado del hecho y resistirlo?"
+            )
     if "familiar" not in detected_topics and not relationship:
         questions.append("¿Existe relación familiar, custodia, guarda, educación o autoridad?")
 
@@ -274,68 +311,51 @@ def build_candidate_articles(
     detected_topics: list[str] | None = None,
     crime_type: str = "unknown",
 ) -> list[dict]:
-    detected_topics = detected_topics if detected_topics is not None else detect_legal_topics(facts)
-    search_terms = []
-
-    for topic in detected_topics:
-        if topic in KEYWORD_SEARCH_TERMS:
-            search_terms.extend(KEYWORD_SEARCH_TERMS[topic])
-
-    if not search_terms:
-        from crime_catalog import get_crime_catalog_entry
-
-        entry = get_crime_catalog_entry(crime_type)
-        search_terms = entry.get("legal_search_terms", [facts])
-
-    candidates_by_key = {}
-    for term in search_terms:
-        for result in search_local_articles(term, articles):
-            candidate_key = (
-                result["source_name"],
-                result["article_number"],
-                result.get("content_hash"),
-            )
-            candidates_by_key.setdefault(candidate_key, result)
-
-    return list(candidates_by_key.values())
+    grouped = get_mapped_articles(crime_type, articles)
+    flat_list = []
+    for group_key in ("penal_articles", "procedural_foundations", "victim_rights", "constitutional_foundations"):
+        flat_list.extend(grouped.get(group_key, []))
+    return flat_list
 
 
-def group_candidate_articles(candidate_articles: list[dict]) -> dict:
-    grouped_articles = {
+def group_candidate_articles(
+    candidate_articles: list[dict],
+    crime_type: str = "unknown",
+) -> dict:
+    grouped = {
         "penal_articles": [],
         "procedural_foundations": [],
         "victim_rights": [],
         "constitutional_foundations": [],
         "human_review_warnings": [],
     }
-
     for article in candidate_articles:
-        classification = article["classification"]
-
-        if classification in {"tipo_penal_base", "agravante", "violacion_equiparada"}:
-            grouped_articles["penal_articles"].append(article)
+        classification = article.get("classification", "otro")
+        if classification in {"tipo_penal_base", "agravante", "violacion_equiparada", "otro"}:
+            source_name = normalize_text(article.get("source_name") or "")
+            if "codigo penal" in source_name:
+                grouped["penal_articles"].append(article)
+            elif "codigo nacional" in source_name:
+                grouped["procedural_foundations"].append(article)
+            elif "victimas" in source_name:
+                grouped["victim_rights"].append(article)
+            elif "constitucion" in source_name:
+                grouped["constitutional_foundations"].append(article)
         elif classification == "fundamento_procesal":
-            grouped_articles["procedural_foundations"].append(article)
+            grouped["procedural_foundations"].append(article)
         elif classification == "derecho_victima":
-            grouped_articles["victim_rights"].append(article)
+            grouped["victim_rights"].append(article)
         elif classification == "fundamento_constitucional":
-            grouped_articles["constitutional_foundations"].append(article)
+            grouped["constitutional_foundations"].append(article)
 
-    grouped_articles["human_review_warnings"] = build_human_review_warnings(grouped_articles)
-    return grouped_articles
-
-
-def build_human_review_warnings(grouped_articles: dict) -> list[str]:
-    warnings = [
+    grouped["human_review_warnings"] = [
         "Este análisis es determinista y debe ser revisado por una persona abogada.",
     ]
-
-    if grouped_articles["penal_articles"] and not grouped_articles["procedural_foundations"]:
-        warnings.append("Hay posibles artículos penales sin fundamento procesal relacionado.")
-    if grouped_articles["penal_articles"] and not grouped_articles["victim_rights"]:
-        warnings.append("Hay posibles artículos penales sin derechos de víctima relacionados.")
-
-    return warnings
+    if grouped["penal_articles"] and not grouped["procedural_foundations"]:
+        grouped["human_review_warnings"].append("Hay posibles artículos penales sin fundamento procesal relacionado.")
+    if grouped["penal_articles"] and not grouped["victim_rights"]:
+        grouped["human_review_warnings"].append("Hay posibles artículos penales sin derechos de víctima relacionados.")
+    return grouped
 
 
 def analyze_facts_deterministically(
@@ -353,14 +373,13 @@ def analyze_facts_deterministically(
     investigation_steps = get_investigation_steps(crime_type, structured_facts)
     
     detected_topics = detect_legal_topics(facts, structured_facts, crime_type)
-    candidate_articles = build_candidate_articles(facts, articles, detected_topics, crime_type)
 
     return {
         "facts_summary": summarize_facts(facts),
         "detected_legal_topics": detected_topics,
         "structured_facts": structured_facts,
-        "candidate_articles": group_candidate_articles(candidate_articles),
-        "missing_questions": build_missing_questions(detected_topics, structured_facts),
+        "candidate_articles": get_mapped_articles(crime_type, articles),
+        "missing_questions": build_missing_questions(detected_topics, structured_facts, crime_type),
         "human_review_required": True,
         "analysis_engine": analysis_engine,
         "legal_assignment_engine": "deterministic_rules",

@@ -29,6 +29,19 @@ def test_classify_violencia_familiar_by_inference():
     assert classify_crime_type(facts, structured) == "violencia_familiar"
 
 
+def test_classify_spousal_repeated_violence_as_violencia_familiar_over_lesiones():
+    facts = (
+        "El agresor lleg\u00f3 al domicilio conyugal, golpe\u00f3 a la v\u00edctima, su c\u00f3nyuge, "
+        "y le caus\u00f3 hematomas visibles. Los hechos se repiten desde hace dos a\u00f1os."
+    )
+    structured = {
+        "violence_detected": True,
+        "relationship_to_aggressor": "c\u00f3nyuge",
+    }
+
+    assert classify_crime_type(facts, structured) == "violencia_familiar"
+
+
 def test_classify_violacion_by_sexual_conduct():
     facts = "La victima acudio a presentar una queja ante la autoridad."
     structured = {"sexual_conduct_detected": True}

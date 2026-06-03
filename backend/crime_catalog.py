@@ -76,9 +76,7 @@ CRIME_CATALOG = {
             "robo simple",
             "robo con violencia",
             "robo agravado",
-            "pandilla",
             "lugar habitado",
-            "allanamiento",
         ],
         "minimum_investigation_steps": [
             {
@@ -206,12 +204,10 @@ CRIME_CATALOG = {
         "legal_search_terms": [
             "lesiones",
             "dano en la salud",
-            "incapacidad",
-            "cicatriz",
-            "deformidad",
             "lesiones dolosas",
             "lesiones culposas",
-            "certificado medico",
+            "cicatriz",
+            "deformidad",
         ],
         "minimum_investigation_steps": [
             {
@@ -330,8 +326,6 @@ CRIME_CATALOG = {
             "homicidio calificado",
             "alevosia",
             "premeditacion",
-            "feminicidio",
-            "cadaver",
         ],
         "minimum_investigation_steps": [
             {
@@ -462,17 +456,11 @@ CRIME_CATALOG = {
         },
         "legal_search_terms": [
             "violacion",
-            "cópula",
-            "actos sexuales",
+            "copula",
             "violacion equiparada",
-            "estupro",
             "abuso sexual",
-            "consentimiento",
-            "menor de quince",
-            "ascendiente",
-            "descendiente",
-            "tutor",
-            "custodia",
+            "estupro",
+            "actos sexuales",
         ],
         "minimum_investigation_steps": [
             {
@@ -548,6 +536,8 @@ CRIME_CATALOG = {
             "marido",
             "esposa",
             "esposo",
+            "conyuge",
+            "cónyuge",
             "hijo agresor",
             "violencia de pareja",
             "violencia conyugal",
@@ -620,16 +610,8 @@ CRIME_CATALOG = {
             "violencia familiar",
             "violencia domestica",
             "violencia intrafamiliar",
-            "maltrato",
+            "maltrato familiar",
             "agresion familiar",
-            "medidas de proteccion",
-            "medidas cautelares",
-            "orden de proteccion",
-            "ascendiente",
-            "descendiente",
-            "conyuge",
-            "concubino",
-            "parentesco",
         ],
         "minimum_investigation_steps": [
             {
@@ -760,13 +742,11 @@ CRIME_CATALOG = {
         },
         "legal_search_terms": [
             "fraude",
-            "engaño",
             "defraudacion",
             "simulacion",
             "estafa",
             "documento falso",
             "falsificacion",
-            "lucro",
             "perjuicio patrimonial",
         ],
         "minimum_investigation_steps": [
