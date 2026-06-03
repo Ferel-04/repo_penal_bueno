@@ -131,3 +131,33 @@ def test_parse_articles_raises_file_not_found_for_missing_file(tmp_path: Path):
 
     with pytest.raises(FileNotFoundError):
         parse_articles(missing_file)
+
+
+def test_load_source_metadata_backend_relative_path():
+    metadata = load_source_metadata(
+        "data/legal_sources/federal/cnpp/2025-11-28.txt"
+    )
+
+    assert metadata["source_name"] == "C\u00f3digo Nacional de Procedimientos Penales"
+    assert metadata["source_version"] == "2025-11-28"
+
+
+def test_load_source_metadata_absolute_path():
+    from ingest import LEGAL_SOURCES_DIR
+
+    absolute = LEGAL_SOURCES_DIR / "federal" / "cnpp" / "2025-11-28.txt"
+    metadata = load_source_metadata(absolute)
+
+    assert metadata["source_name"] == "C\u00f3digo Nacional de Procedimientos Penales"
+    assert metadata["source_version"] == "2025-11-28"
+
+
+def test_load_source_metadata_fallback_mock_for_non_source_path(tmp_path: Path):
+    fake_file = tmp_path / "some_other_dir" / "unknown.txt"
+    fake_file.parent.mkdir(parents=True)
+    fake_file.write_text("not a real source", encoding="utf-8")
+
+    metadata = load_source_metadata(fake_file)
+
+    assert metadata["source_name"] == SOURCE_NAME
+    assert metadata["source_type"] == "mock"
