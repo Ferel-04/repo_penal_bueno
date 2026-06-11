@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import React, { useState } from "react";
+import { API_BASE_URL } from "./api-url";
 import ThemeToggle from "./theme-toggle";
 
 type LegalArticle = {
@@ -10,6 +12,7 @@ type LegalArticle = {
   content_hash?: string | null;
   source_version?: string | null;
   last_reform_date?: string | null;
+  source_url?: string | null;
   classification: string;
   match_reason?: string;
 };
@@ -24,9 +27,33 @@ type CandidateGroups = {
 
 type InvestigationStep = {
   step: string;
-  legal_basis: string;
+  legal_basis: string | null;
   urgent: boolean;
   category: string;
+  diligence_id?: string;
+  display_group?: "grounded" | "preliminary";
+  foundation_status?: "source_verified" | "unverified";
+  legal_review_status?: "pending" | "approved" | "rejected";
+  purpose?: string;
+  triggered_by?: string[];
+  applicability_condition?: string;
+  responsible_authority?: string;
+  priority?: string;
+  expected_result?: string;
+  warnings?: string[];
+  foundations?: InvestigationFoundation[];
+};
+
+type InvestigationFoundation = {
+  source_name: string;
+  article_number: string;
+  fractions: string[];
+  foundation_type?: "procedural_basis" | "victim_right" | "record_requirement";
+  reason: string;
+  source_version?: string | null;
+  last_reform_date?: string | null;
+  source_url?: string | null;
+  content_hash?: string | null;
 };
 
 type AnalyzeResponse = {
@@ -44,7 +71,7 @@ type AnalyzeResponse = {
   investigation_steps: InvestigationStep[];
 };
 
-const API_URL = "http://127.0.0.1:8000/analyze";
+const ANALYZE_URL = `${API_BASE_URL}/analyze`;
 
 const sampleFacts =
   "La víctima refiere violencia y amenazas. Solicita medida de protección, asesoría jurídica y reparación integral.";
@@ -86,9 +113,11 @@ function ArticleCard({ article }: { article: LegalArticle }) {
         </span>
       </div>
 
-      <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-700 dark:text-neutral-300">
-        {article.content}
-      </p>
+      {article.match_reason ? (
+        <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-neutral-300">
+          {article.match_reason}
+        </p>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-600 dark:text-neutral-400">
         <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1 font-mono dark:border-neutral-700 dark:bg-neutral-800">
@@ -98,6 +127,16 @@ function ArticleCard({ article }: { article: LegalArticle }) {
           <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1 dark:border-neutral-700 dark:bg-neutral-800">
             {versionParts.join(" · ")}
           </span>
+        ) : null}
+        {article.source_url ? (
+          <a
+            href={article.source_url}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded border border-slate-200 bg-slate-50 px-2 py-1 font-medium underline underline-offset-2 dark:border-neutral-700 dark:bg-neutral-800"
+          >
+            Consultar fuente oficial
+          </a>
         ) : null}
       </div>
     </article>
@@ -199,6 +238,155 @@ const categoryLabels: Record<string, string> = {
   diligencia: "Otras diligencias",
 };
 
+const foundationTypeLabels: Record<string, string> = {
+  procedural_basis: "Fundamento procesal",
+  victim_right: "Derecho de la víctima",
+  record_requirement: "Requisito de registro",
+};
+
+function InvestigationStepCard({ step }: { step: InvestigationStep }) {
+  const isGrounded = step.display_group === "grounded";
+
+  return (
+    <li className="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-neutral-700 dark:bg-neutral-800">
+      <div className="flex items-start gap-2">
+        {step.urgent ? (
+          <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-red-500" />
+        ) : (
+          <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-slate-300 dark:bg-neutral-600" />
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm leading-6 text-slate-900 dark:text-neutral-100">
+              {step.step}
+            </p>
+            {step.urgent ? (
+              <span className="inline-block rounded bg-red-100 px-1.5 py-0.5 text-xs font-semibold uppercase text-red-700 dark:bg-red-950 dark:text-red-300">
+                Urgente
+              </span>
+            ) : null}
+            {step.display_group ? (
+              <span
+                className={
+                  isGrounded
+                    ? "rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-200"
+                    : "rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
+                }
+              >
+                {isGrounded
+                  ? "Fuente verificada; revisión jurídica pendiente"
+                  : "Sugerencia preliminar"}
+              </span>
+            ) : null}
+          </div>
+
+          {step.legal_basis ? (
+            <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-neutral-400">
+              {step.legal_basis}
+            </p>
+          ) : null}
+
+          {step.purpose ? (
+            <div className="mt-3 space-y-3 border-t border-slate-200 pt-3 text-xs leading-5 text-slate-600 dark:border-neutral-700 dark:text-neutral-300">
+              <p>
+                <span className="font-semibold text-slate-800 dark:text-neutral-100">
+                  Finalidad:
+                </span>{" "}
+                {step.purpose}
+              </p>
+              {step.triggered_by && step.triggered_by.length > 0 ? (
+                <div>
+                  <p className="font-semibold text-slate-800 dark:text-neutral-100">
+                    Hechos que activaron la revisión:
+                  </p>
+                  <ul className="mt-1 list-disc pl-5">
+                    {step.triggered_by.map((trigger) => (
+                      <li key={trigger}>{trigger}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              <p>
+                <span className="font-semibold text-slate-800 dark:text-neutral-100">
+                  Condición:
+                </span>{" "}
+                {step.applicability_condition}
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <p>
+                  <span className="font-semibold text-slate-800 dark:text-neutral-100">
+                    Autoridad:
+                  </span>{" "}
+                  {step.responsible_authority}
+                </p>
+                <p>
+                  <span className="font-semibold text-slate-800 dark:text-neutral-100">
+                    Prioridad:
+                  </span>{" "}
+                  {step.priority}
+                </p>
+              </div>
+              <p>
+                <span className="font-semibold text-slate-800 dark:text-neutral-100">
+                  Resultado esperado:
+                </span>{" "}
+                {step.expected_result}
+              </p>
+              {step.foundations?.map((foundation) => (
+                <div
+                  key={`${foundation.source_name}-${foundation.article_number}-${foundation.foundation_type}`}
+                  className="rounded border border-slate-200 bg-white p-3 dark:border-neutral-600 dark:bg-neutral-900"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold text-slate-900 dark:text-neutral-100">
+                      {foundation.source_name}, artículo {foundation.article_number}
+                    </p>
+                    {foundation.foundation_type ? (
+                      <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 dark:bg-neutral-800 dark:text-neutral-300">
+                        {foundationTypeLabels[foundation.foundation_type]}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1">{foundation.reason}</p>
+                  {foundation.fractions.length > 0 ? (
+                    <p className="mt-1">
+                      Fracciones aplicables: {foundation.fractions.join(", ")}
+                    </p>
+                  ) : null}
+                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-500 dark:text-neutral-400">
+                    <span>Versión: {foundation.source_version ?? "sin versión"}</span>
+                    <span>Hash: {shortHash(foundation.content_hash)}</span>
+                    {foundation.source_url ? (
+                      <a
+                        href={foundation.source_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-medium underline underline-offset-2"
+                      >
+                        Fuente oficial
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+              {step.warnings && step.warnings.length > 0 ? (
+                <div className="rounded border border-amber-200 bg-amber-50 p-3 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                  <p className="font-semibold">Advertencias</p>
+                  <ul className="mt-1 list-disc pl-5">
+                    {step.warnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </li>
+  );
+}
+
 function InvestigationStepsSection({
   steps,
   detectedCrimeType,
@@ -220,6 +408,11 @@ function InvestigationStepsSection({
   }
 
   const urgentCount = steps.filter((s) => s.urgent).length;
+  const groundedSteps = steps.filter((step) => step.display_group === "grounded");
+  const preliminarySteps = steps.filter((step) => step.display_group === "preliminary");
+  const usesTrustGroups =
+    detectedCrimeType === "violencia_familiar" &&
+    groundedSteps.length + preliminarySteps.length === steps.length;
 
   const grouped = new Map<string, InvestigationStep[]>();
   for (const cat of categoryOrder) {
@@ -252,44 +445,57 @@ function InvestigationStepsSection({
           </p>
         ) : null}
 
-        <div className="space-y-6 pb-2">
-          {Array.from(grouped.entries()).map(([cat, catSteps]) => (
-            <div key={cat}>
-              <h3 className="mb-2 text-sm font-semibold text-slate-800 dark:text-neutral-200">
-                {categoryLabels[cat] ?? cat}
+        {usesTrustGroups ? (
+          <div className="space-y-5 pb-2">
+            <div>
+              <h3 className="mb-3 text-sm font-semibold text-slate-800 dark:text-neutral-200">
+                Diligencias con fundamento verificable
               </h3>
               <ul className="space-y-3">
-                {catSteps.map((step, idx) => (
-                  <li
-                    key={`${cat}-${idx}`}
-                    className="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-neutral-700 dark:bg-neutral-800"
-                  >
-                    <div className="flex items-start gap-2">
-                      {step.urgent ? (
-                        <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-red-500" />
-                      ) : (
-                        <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-slate-300 dark:bg-neutral-600" />
-                      )}
-                      <div>
-                        <p className="text-sm leading-6 text-slate-900 dark:text-neutral-100">
-                          {step.step}
-                          {step.urgent ? (
-                            <span className="ml-2 inline-block rounded bg-red-100 px-1.5 py-0.5 text-xs font-semibold uppercase text-red-700 dark:bg-red-950 dark:text-red-300">
-                              Urgente
-                            </span>
-                          ) : null}
-                        </p>
-                        <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-neutral-400">
-                          {step.legal_basis}
-                        </p>
-                      </div>
-                    </div>
-                  </li>
+                {groundedSteps.map((step) => (
+                  <InvestigationStepCard step={step} key={step.diligence_id} />
                 ))}
               </ul>
             </div>
-          ))}
-        </div>
+            {preliminarySteps.length > 0 ? (
+              <div className="border-t border-slate-200 pt-2 dark:border-neutral-700">
+                <CollapsibleSection
+                  title="Sugerencias preliminares"
+                  defaultOpen={false}
+                  badge={
+                    <span className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+                      {preliminarySteps.length}
+                    </span>
+                  }
+                >
+                  <p className="mb-3 rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                    Sugerencias operativas pendientes de fuente específica y validación jurídica.
+                  </p>
+                  <ul className="space-y-3 pb-2">
+                    {preliminarySteps.map((step) => (
+                      <InvestigationStepCard step={step} key={step.diligence_id} />
+                    ))}
+                  </ul>
+                </CollapsibleSection>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="space-y-6 pb-2">
+            {Array.from(grouped.entries()).map(([cat, catSteps]) => (
+              <div key={cat}>
+                <h3 className="mb-2 text-sm font-semibold text-slate-800 dark:text-neutral-200">
+                  {categoryLabels[cat] ?? cat}
+                </h3>
+                <ul className="space-y-3">
+                  {catSteps.map((step, idx) => (
+                    <InvestigationStepCard step={step} key={`${cat}-${idx}`} />
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
       </CollapsibleSection>
     </section>
   );
@@ -316,7 +522,7 @@ export default function Home() {
     setError(null);
 
     try {
-      const response = await fetch(API_URL, {
+      const response = await fetch(ANALYZE_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -361,6 +567,12 @@ export default function Home() {
           <p className="max-w-3xl text-sm leading-6 text-slate-700 dark:text-neutral-300">
             Herramienta de apoyo. No sustituye criterio jurídico profesional.
           </p>
+          <Link
+            href="/revision/violencia-familiar"
+            className="w-fit text-sm font-semibold text-slate-700 underline underline-offset-4 dark:text-neutral-200"
+          >
+            Abrir revisión jurídica de violencia familiar
+          </Link>
         </header>
 
         <section className="grid gap-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
@@ -406,7 +618,7 @@ export default function Home() {
                 {isLoading ? "Analizando..." : "Analizar"}
               </button>
               <span className="text-xs text-slate-500 dark:text-neutral-400">
-                Backend esperado: 127.0.0.1:8000
+                API: {API_BASE_URL}
               </span>
             </div>
             {error ? (

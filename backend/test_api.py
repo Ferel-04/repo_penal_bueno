@@ -4,7 +4,7 @@ from fastapi import HTTPException
 import local_llm
 import main
 from ingest import parse_all_sources
-from schemas import FactInput, SearchInput
+from schemas import FactInput, FamilyViolenceReviewRecord, SearchInput
 
 
 def setup_function():
@@ -220,6 +220,87 @@ def test_analyze_returns_crime_type_and_investigation_steps():
     )
     assert any(step["urgent"] is True for step in payload["investigation_steps"])
     assert payload["crime_subtype"] is None or isinstance(payload["crime_subtype"], str)
+
+
+def test_family_violence_protection_step_is_grounded_in_cnpp_article_137():
+    payload = main.analyze_facts(
+        FactInput(
+            facts=(
+                "El esposo golpeó a la víctima en el domicilio y la amenazó con matarla."
+            ),
+            crime_type="violencia_familiar",
+        )
+    )
+
+    protection_step = next(
+        step
+        for step in payload["investigation_steps"]
+        if step.get("diligence_id") == "vf_medidas_proteccion_urgentes"
+    )
+
+    assert protection_step["legal_basis"].startswith("Art. 137 CNPP")
+    assert "Art. 154" not in protection_step["legal_basis"]
+    assert protection_step["category"] == "cautelar"
+    assert protection_step["display_group"] == "grounded"
+    assert protection_step["foundation_status"] == "source_verified"
+    assert protection_step["legal_review_status"] == "pending"
+    assert protection_step["responsible_authority"] == "Ministerio Público"
+    assert protection_step["priority"] == "inmediata"
+    assert "riesgo inminente" in protection_step["applicability_condition"]
+    assert "Relación familiar o de pareja descrita en el relato" in protection_step["triggered_by"]
+    assert "Violencia física o lesiones reportadas" in protection_step["triggered_by"]
+    assert "Amenaza de muerte reportada como factor de riesgo" in protection_step["triggered_by"]
+
+    foundation = protection_step["foundations"][0]
+    assert foundation["article_number"] == "137"
+    assert foundation["source_name"] == "Código Nacional de Procedimientos Penales"
+    assert foundation["source_version"] == "2025-11-28"
+    assert foundation["last_reform_date"] == "2025-11-28"
+    assert foundation["content_hash"]
+    assert foundation["source_url"].endswith("/CNPP.pdf")
+    assert foundation["fractions"] == [
+        "I",
+        "II",
+        "III",
+        "IV",
+        "V",
+        "VI",
+        "VII",
+        "VIII",
+        "IX",
+        "X",
+    ]
+
+
+def test_family_violence_review_endpoints_return_and_validate_full_record():
+    payload = main.get_family_violence_review()
+
+    assert payload["crime_type"] == "violencia_familiar"
+    assert len(payload["catalog"]) == 7
+    assert len(payload["synthetic_cases"]) == 7
+
+    record = FamilyViolenceReviewRecord.model_validate(
+        {
+            "schema_version": 1,
+            "crime_type": "violencia_familiar",
+            "reviewer_name": "Lic. Persona Revisora",
+            "reviewed_at": "2026-06-09T18:00:00-06:00",
+            "decisions": [
+                {
+                    "diligence_id": item["diligence_id"],
+                    "fingerprint": item["review_fingerprint"],
+                    "status": "pending",
+                    "observations": "",
+                }
+                for item in payload["catalog"]
+            ],
+        }
+    )
+
+    result = main.validate_family_violence_review(record)
+
+    assert result["valid"] is True
+    assert len(result["record"]["decisions"]) == 7
 
 
 def test_analyze_fraude_does_not_return_violencia_topic():

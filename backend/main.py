@@ -2,10 +2,14 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from db_ingest import get_articles_from_db
+from family_violence_review import (
+    get_family_violence_review_payload,
+    validate_family_violence_review_record,
+)
 from ingest import parse_all_sources
 from legal_rules import analyze_facts_deterministically, search_local_articles
 from local_llm import extract_facts_with_local_llm
-from schemas import FactInput, SearchInput
+from schemas import FactInput, FamilyViolenceReviewRecord, SearchInput
 
 
 app = FastAPI(title="MVP Asistente Penal Michoacán")
@@ -16,6 +20,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ],
+    allow_origin_regex=r"https://[a-zA-Z0-9-]+\.vercel\.app",
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -86,6 +91,27 @@ def analyze_facts(input_data: FactInput):
         analysis_engine=analysis_engine,
         crime_type=input_data.crime_type,
     )
+
+
+@app.get("/review/family-violence")
+def get_family_violence_review():
+    return get_family_violence_review_payload(load_articles())
+
+
+@app.post("/review/family-violence/validate")
+def validate_family_violence_review(input_data: FamilyViolenceReviewRecord):
+    try:
+        normalized = validate_family_violence_review_record(
+            input_data,
+            load_articles(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return {
+        "valid": True,
+        "record": normalized,
+    }
 
 
 @app.post("/api/analyze")

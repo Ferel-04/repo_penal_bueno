@@ -370,7 +370,12 @@ def analyze_facts_deterministically(
     
     crime_subtype = get_crime_subtype(crime_type, structured_facts)
     crime_display_name = get_crime_display_name(crime_type)
-    investigation_steps = get_investigation_steps(crime_type, structured_facts)
+    investigation_steps = get_investigation_steps(
+        crime_type,
+        structured_facts,
+        articles=articles,
+        facts=facts,
+    )
     
     detected_topics = detect_legal_topics(facts, structured_facts, crime_type)
 

@@ -613,56 +613,7 @@ CRIME_CATALOG = {
             "maltrato familiar",
             "agresion familiar",
         ],
-        "minimum_investigation_steps": [
-            {
-                "step": "Acta de entrevista con la víctima",
-                "legal_basis": "Art. 264 CNPP — Entrevistas a víctimas",
-                "urgent": True,
-                "applies_when": "always",
-            },
-            {
-                "step": "Solicitud de medidas de protección urgentes",
-                "legal_basis": "Art. 154 CNPP — Medidas de protección",
-                "urgent": True,
-                "applies_when": "always",
-            },
-            {
-                "step": "Certificado médico de lesiones (si violencia física)",
-                "legal_basis": "Art. 271 CNPP — Peritajes médicos",
-                "urgent": True,
-                "applies_when": "violence_type == 'fisica'",
-            },
-            {
-                "step": "Dictamen de psicología forense a la víctima",
-                "legal_basis": "Art. 271 CNPP — Peritajes",
-                "urgent": True,
-                "applies_when": "always",
-            },
-            {
-                "step": "Dictamen de trabajo social (visita domiciliaria)",
-                "legal_basis": "Art. 271 CNPP — Peritajes",
-                "urgent": False,
-                "applies_when": "always",
-            },
-            {
-                "step": "Entrevista a menores testigos (Cámara Gesell)",
-                "legal_basis": "Art. 206 CNPP — Testimonio de menores",
-                "urgent": False,
-                "applies_when": "minors_present",
-            },
-            {
-                "step": "Valoración de riesgo de feminicidio",
-                "legal_basis": "Art. 154 CNPP — Medidas de protección; Protocolo Alba",
-                "urgent": True,
-                "applies_when": "threats_to_kill",
-            },
-            {
-                "step": "Recabar denuncias previas contra el agresor",
-                "legal_basis": "Art. 213 CNPP — Investigación",
-                "urgent": False,
-                "applies_when": "always",
-            },
-        ],
+        "minimum_investigation_steps": [],
     },
     "fraude": {
         "display_name": "Fraude",
