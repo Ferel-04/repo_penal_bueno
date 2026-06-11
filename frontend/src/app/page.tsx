@@ -104,6 +104,56 @@ function ArticleCard({ article }: { article: LegalArticle }) {
   );
 }
 
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className={`h-5 w-5 shrink-0 text-slate-400 transition-transform duration-200 dark:text-neutral-500 ${open ? "rotate-180" : ""}`}
+      aria-hidden="true"
+    >
+      <path
+        fillRule="evenodd"
+        d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+function CollapsibleSection({
+  title,
+  badge,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  badge?: React.ReactNode;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex w-full items-center justify-between gap-3 py-3 text-left"
+        aria-expanded={open}
+      >
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold text-slate-950 dark:text-neutral-50">{title}</h2>
+          {badge}
+        </div>
+        <ChevronIcon open={open} />
+      </button>
+      {open ? children : null}
+    </div>
+  );
+}
+
 function ArticleGroup({
   title,
   articles,
@@ -112,25 +162,28 @@ function ArticleGroup({
   articles: LegalArticle[];
 }) {
   return (
-    <section className="border-t border-slate-200 py-6 dark:border-neutral-700">
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <h2 className="text-lg font-semibold text-slate-950 dark:text-neutral-50">{title}</h2>
-        <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400">
-          {articles.length}
-        </span>
-      </div>
-      {articles.length > 0 ? (
-        <div className="grid gap-3">
-          {articles.map((article) => (
-            <ArticleCard
-              article={article}
-              key={`${article.source_name}-${article.article_number}-${article.content_hash}`}
-            />
-          ))}
-        </div>
-      ) : (
-        <p className="text-sm text-slate-500 dark:text-neutral-400">Sin coincidencias para este grupo.</p>
-      )}
+    <section className="border-t border-slate-200 dark:border-neutral-700">
+      <CollapsibleSection
+        title={title}
+        badge={
+          <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400">
+            {articles.length}
+          </span>
+        }
+      >
+        {articles.length > 0 ? (
+          <div className="grid gap-3 pb-4">
+            {articles.map((article) => (
+              <ArticleCard
+                article={article}
+                key={`${article.source_name}-${article.article_number}-${article.content_hash}`}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="pb-4 text-sm text-slate-500 dark:text-neutral-400">Sin coincidencias para este grupo.</p>
+        )}
+      </CollapsibleSection>
     </section>
   );
 }
@@ -185,59 +238,59 @@ function InvestigationStepsSection({
 
   return (
     <section className="rounded-md border border-slate-200 bg-white px-4 py-6 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-slate-950 dark:text-neutral-50">
-          Diligencias mínimas de investigación
-        </h2>
-        <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400">
-          {steps.length} diligencias · {urgentCount} urgentes
-        </span>
-      </div>
+      <CollapsibleSection
+        title="Diligencias mínimas de investigación"
+        badge={
+          <span className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400">
+            {steps.length} diligencias · {urgentCount} urgentes
+          </span>
+        }
+      >
+        {detectedCrimeType === "unknown" ? (
+          <p className="mb-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300">
+            Diligencias genéricas — selecciona el tipo de delito para ver las específicas.
+          </p>
+        ) : null}
 
-      {detectedCrimeType === "unknown" ? (
-        <p className="mb-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300">
-          Diligencias genéricas — selecciona el tipo de delito para ver las específicas.
-        </p>
-      ) : null}
-
-      <div className="space-y-6">
-        {Array.from(grouped.entries()).map(([cat, catSteps]) => (
-          <div key={cat}>
-            <h3 className="mb-2 text-sm font-semibold text-slate-800 dark:text-neutral-200">
-              {categoryLabels[cat] ?? cat}
-            </h3>
-            <ul className="space-y-3">
-              {catSteps.map((step, idx) => (
-                <li
-                  key={`${cat}-${idx}`}
-                  className="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-neutral-700 dark:bg-neutral-800"
-                >
-                  <div className="flex items-start gap-2">
-                    {step.urgent ? (
-                      <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-red-500" />
-                    ) : (
-                      <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-slate-300 dark:bg-neutral-600" />
-                    )}
-                    <div>
-                      <p className="text-sm leading-6 text-slate-900 dark:text-neutral-100">
-                        {step.step}
-                        {step.urgent ? (
-                          <span className="ml-2 inline-block rounded bg-red-100 px-1.5 py-0.5 text-xs font-semibold uppercase text-red-700 dark:bg-red-950 dark:text-red-300">
-                            Urgente
-                          </span>
-                        ) : null}
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-neutral-400">
-                        {step.legal_basis}
-                      </p>
+        <div className="space-y-6 pb-2">
+          {Array.from(grouped.entries()).map(([cat, catSteps]) => (
+            <div key={cat}>
+              <h3 className="mb-2 text-sm font-semibold text-slate-800 dark:text-neutral-200">
+                {categoryLabels[cat] ?? cat}
+              </h3>
+              <ul className="space-y-3">
+                {catSteps.map((step, idx) => (
+                  <li
+                    key={`${cat}-${idx}`}
+                    className="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-neutral-700 dark:bg-neutral-800"
+                  >
+                    <div className="flex items-start gap-2">
+                      {step.urgent ? (
+                        <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                      ) : (
+                        <span className="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full bg-slate-300 dark:bg-neutral-600" />
+                      )}
+                      <div>
+                        <p className="text-sm leading-6 text-slate-900 dark:text-neutral-100">
+                          {step.step}
+                          {step.urgent ? (
+                            <span className="ml-2 inline-block rounded bg-red-100 px-1.5 py-0.5 text-xs font-semibold uppercase text-red-700 dark:bg-red-950 dark:text-red-300">
+                              Urgente
+                            </span>
+                          ) : null}
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-neutral-400">
+                          {step.legal_basis}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </CollapsibleSection>
     </section>
   );
 }
@@ -467,15 +520,14 @@ export default function Home() {
               />
             ))}
 
-            <section className="border-t border-slate-200 py-6 dark:border-neutral-700">
-              <h2 className="text-lg font-semibold text-slate-950 dark:text-neutral-50">
-                Advertencias de revisión humana
-              </h2>
-              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-700 dark:text-neutral-300">
-                {result.candidate_articles.human_review_warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
+            <section className="border-t border-slate-200 dark:border-neutral-700">
+              <CollapsibleSection title="Advertencias de revisión humana" defaultOpen={false}>
+                <ul className="list-disc space-y-2 pl-5 pb-4 text-sm leading-6 text-slate-700 dark:text-neutral-300">
+                  {result.candidate_articles.human_review_warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              </CollapsibleSection>
             </section>
           </section>
         ) : null}
